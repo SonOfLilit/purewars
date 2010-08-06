@@ -1,0 +1,15 @@
+name:                purewars
+version:             0.0
+synopsis:            <Project description>
+description:         <Project description>
+category:            Game
+license:             BSD3
+license-file:        LICENSE
+author:              Aur Saraf
+maintainer:          sonoflilit@gmail.com
+build-depends:       base >= 4, time, monads-fd, OpenGL, GLUT >= 2
+build-type:          Simple
+
+executable:          purewars
+main-is:             Main.hs
+ghc-options:         -O2 -Wall

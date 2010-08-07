@@ -10,27 +10,27 @@ import qualified Graphics.UI.GLUT as GLUT
 
 type Length = Double
 type Vector2 = (Length, Length)
-($*^) :: Length -> Vector2 -> Vector2
-s $*^ (x, y) = (s*x, s*y)
-(^+^) :: Vector2 -> Vector2 -> Vector2
-(a, b) ^+^ (a', b') = (a+a', b+b')
+(.*:) :: Length -> Vector2 -> Vector2
+s .*: (x, y) = (s*x, s*y)
+(+:) :: Vector2 -> Vector2 -> Vector2
+(a, b) +: (a', b') = (a+a', b+b')
 
 type Matrix2 = (Vector2, Vector2)
-($*#) :: Length -> Matrix2 -> Matrix2
-s $*# (u, v) = (s $*^ u, s $*^ v)
-(#*^) :: Matrix2 -> Vector2 -> Vector2
-(v, u) #*^ (x, y) = (x $*^ v) ^+^ (y $*^ u)
+(.*#) :: Length -> Matrix2 -> Matrix2
+s .*# (u, v) = (s .*: u, s .*: v)
+(#*:) :: Matrix2 -> Vector2 -> Vector2
+(v, u) #*: (x, y) = (x .*: v) +: (y .*: u)
 (#*#) :: Matrix2 -> Matrix2 -> Matrix2
-m #*# (c, d) = (m #*^ c, m #*^ d)
+m #*# (c, d) = (m #*: c, m #*: d)
 type Transformation = (Matrix2, Vector2)
-(~*~) :: Transformation -> Transformation -> Transformation
-(m, v) ~*~ (m', v') = (m #*# m', v ^+^ v')
-(~*^) :: Transformation -> Vector2 -> Vector2
-(m, u) ~*^ v = (m #*^ v) ^+^ u
+(#:*#:) :: Transformation -> Transformation -> Transformation
+(m, v) #:*#: (m', v') = (m #*# m', v +: v')
+(#:*:) :: Transformation -> Vector2 -> Vector2
+(m, u) #:*: v = (m #*: v) +: u
 zeroV = (0, 0)
 idM = ((1, 0), (0, 1))
 
-scale k = (k $*# idM, zeroV)
+scale k = (k .*# idM, zeroV)
 translate v = (idM, v)
 
 type Line = (Vector2, Vector2)
@@ -45,7 +45,7 @@ data Ship = Ship Vector2
 instance GameObject Ship where
   tick (Ship (x, y)) t = return $ Ship (x+t', y+2*t') where t' = realToFrac t
   draw (Ship pos) = map t2 shipShape
-    where t = (scale 10 ~*~ translate pos ~*^)
+    where t = (scale 10 #:*#: translate pos #:*:)
           t2 (a, b) = (t a, t b)
 
 shipShape :: [Line]
@@ -58,7 +58,7 @@ logic t = do
   state <- get
   let d = 0.5 * realToFrac t
       Ship pos = ship1 state
-  put state {ship1 = Ship (pos ^+^ (d, 2*d))}
+  put state {ship1 = Ship (pos +: (d, 2*d))}
 
 getLines :: GameState -> [Line]
 getLines GameState {ship1 = ship} = draw ship

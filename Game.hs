@@ -11,6 +11,7 @@ import Matrix
 
 
 type Line = (Vector2, Vector2)
+
 data GameState = GameState {ship1 :: Ship}
 type LogicStep = NominalDiffTime -> State GameState ()
 
@@ -21,9 +22,11 @@ class GameObject a where
 data Ship = Ship Vector2
 instance GameObject Ship where
   tick (Ship (x, y)) t = return $ Ship (x+t', y+2*t') where t' = realToFrac t
-  draw (Ship pos) = map t2 shipShape
-    where t = (scale 10 #:*#: translate pos #:*:)
-          t2 (a, b) = (t a, t b)
+  draw (Ship pos) = mapLines (scale 10 #:*#: translate pos #:*:) shipShape
+
+mapLines :: (Vector2 -> Vector2) -> [Line] -> [Line]
+mapLines f = map f' 
+  where f' (v, u) = (f v, f u)
 
 shipShape :: [Line]
 shipShape = [((-1, -1), (1, 0))

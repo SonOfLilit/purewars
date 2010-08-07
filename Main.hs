@@ -25,7 +25,7 @@ drawLines :: [Line] -> IO ()
 drawLines lines = do
   GL.color (GL.Color3 1.0 1.0 1.0 :: GL.Color3 GL.GLfloat)
   forM_ lines (\ (p0, p1) -> drawOneLine (v p0) (v p1))
-    where v pos = uncurry GL.Vertex2 $ pos
+    where v = uncurry GL.Vertex2
 
 initGL :: IO ()
 initGL = do

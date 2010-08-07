@@ -24,17 +24,22 @@ mapGameStateM f s@(GameState{ship1, sun}) = do
 objects :: GameState -> [GameObject]
 objects (GameState{ship1, sun}) = [ship1, sun]
 
-data GameObject = Ship {position :: Vector2}
+data GameObject = Ship {position, velocity :: Vector2}
                 | Sun {position :: Vector2}
 
 type LogicStep = NominalDiffTime -> GameState -> IO GameState
 
 tick :: NominalDiffTime -> GameObject -> IO GameObject
-tick t ship@(Ship _) = return $ ship {position = position ship +: (t', 2*t')} where t' = realToFrac t
+tick t ship@(Ship{position, velocity}) = do
+  let t' = realToFrac t
+      sumForces = (1, 0)
+      velocity' = velocity +: (t' .*: sumForces)
+      position' = position +: (t' .*: velocity')
+  return ship {position = position', velocity = velocity'}
 tick _ sun@(Sun _) = return sun
 
 shape :: GameObject -> [Line]
-shape (Ship _) = mapLines (scale 10 #:*:) [((-1, -1), (1, 0))
+shape (Ship _ _) = mapLines (scale 10 #:*:) [((-1, -1), (1, 0))
                                           ,((1, 0), (-1, 1))
                                           ,((-1, 1), (-1, -1))]
 shape (Sun _) = [((-1, -1), (1, 0))
@@ -56,5 +61,5 @@ getLines :: GameState -> [Line]
 getLines = concatMap draw . objects
 
 initialGameState :: GameState
-initialGameState = GameState {ship1 = Ship {position = (0, 0)}
+initialGameState = GameState {ship1 = Ship {position = (0, 0), velocity = (1, 1)}
                              ,sun = Sun {position = (100, 200)}}

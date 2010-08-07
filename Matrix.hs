@@ -1,15 +1,28 @@
 module Matrix where
 
 
-type Length = Double
-type Vector2 = (Length, Length)
-(.*:) :: Length -> Vector2 -> Vector2
+-- Key for operator names:
+-- 
+-- - . is scalar
+-- 
+-- - : is vector
+-- 
+-- - # is matrix
+-- 
+-- - #: is transformation
+--
+-- so, e.g., #:*: is application of a transformation to a vector.
+--
+-- :+: was renamed +: because only data constructors can be called /:.*/
+type Scalar = Double
+type Vector2 = (Scalar, Scalar)
+(.*:) :: Scalar -> Vector2 -> Vector2
 s .*: (x, y) = (s*x, s*y)
 (+:) :: Vector2 -> Vector2 -> Vector2
 (a, b) +: (a', b') = (a+a', b+b')
 
 type Matrix2 = (Vector2, Vector2)
-(.*#) :: Length -> Matrix2 -> Matrix2
+(.*#) :: Scalar -> Matrix2 -> Matrix2
 s .*# (u, v) = (s .*: u, s .*: v)
 (#*:) :: Matrix2 -> Vector2 -> Vector2
 (v, u) #*: (x, y) = (x .*: v) +: (y .*: u)
@@ -25,7 +38,7 @@ zeroV = (0, 0)
 idM :: Matrix2
 idM = ((1, 0), (0, 1))
 
-scale :: Length -> Transformation
+scale :: Scalar -> Transformation
 scale k = (k .*# idM, zeroV)
 translate :: Vector2 -> Transformation
 translate v = (idM, v)

@@ -17,7 +17,7 @@ fps = 1/25
 initialWindowSize :: GL.Size
 initialWindowSize = GL.Size 640 480
 
-drawOneLine :: GL.Vertex2 Length -> GL.Vertex2 Length -> IO ()
+drawOneLine :: GL.Vertex2 Scalar -> GL.Vertex2 Scalar -> IO ()
 drawOneLine p1 p2 = GL.renderPrimitive GL.Lines $ do GL.vertex p1; GL.vertex p2
 
 drawLines :: [Line] -> IO ()

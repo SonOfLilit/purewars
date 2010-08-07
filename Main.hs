@@ -1,7 +1,6 @@
 module Main where
 import Prelude hiding (lines)
 import Control.Monad
-import Control.Monad.State
 import Data.IORef
 import Data.Time.Clock
 import Graphics.Rendering.OpenGL (($=))
@@ -42,12 +41,14 @@ reshape size@(GL.Size w h) = do
 
 frame :: UTCTime -> IORef GameState -> LogicStep -> GLUT.TimerCallback
 frame lastFrameTime stateRef logicStep = do
+  now <- getCurrentTime
+  let timeDiff = now `diffUTCTime` lastFrameTime
+  
   state <- readIORef stateRef
-  let ((), state') = runState (logicStep 1.0) state
+  state' <- logicStep (timeDiff) state
   writeIORef stateRef state'
   GLUT.postRedisplay Nothing
   
-  now <- getCurrentTime
   let nextFrameTime = fps `addUTCTime` lastFrameTime
       waitTime = nextFrameTime `diffUTCTime` now
       msWait = truncate (waitTime * 1000)

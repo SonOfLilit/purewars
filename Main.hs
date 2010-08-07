@@ -27,10 +27,14 @@ type Transformation = (Matrix2, Vector2)
 (m, v) #:*#: (m', v') = (m #*# m', v +: v')
 (#:*:) :: Transformation -> Vector2 -> Vector2
 (m, u) #:*: v = (m #*: v) +: u
+zeroV :: Vector2
 zeroV = (0, 0)
+idM :: Matrix2
 idM = ((1, 0), (0, 1))
 
+scale :: Length -> Transformation
 scale k = (k .*# idM, zeroV)
+translate :: Vector2 -> Transformation
 translate v = (idM, v)
 
 type Line = (Vector2, Vector2)
@@ -85,6 +89,7 @@ reshape size@(GL.Size w h) = do
   GL.loadIdentity
   GL.ortho2D 0 (fromIntegral w) 0 (fromIntegral h)
 
+fps :: (Fractional a) => a
 fps = 1/25
 
 frame :: UTCTime -> IORef GameState -> LogicStep -> GLUT.TimerCallback

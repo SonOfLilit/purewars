@@ -20,6 +20,12 @@ type Vector2 = (Scalar, Scalar)
 s .*: (x, y) = (s*x, s*y)
 (+:) :: Vector2 -> Vector2 -> Vector2
 (a, b) +: (a', b') = (a+a', b+b')
+(-:) :: Vector2 -> Vector2 -> Vector2
+(a, b) -: (a', b') = (a-a', b-b')
+toNormal :: Vector2 -> (Vector2, Scalar)
+toNormal v@(x, y) = (a, r)
+  where r = sqrt(x*x + y*y)
+        a = (1/r) .*: v
 
 type Matrix2 = (Vector2, Vector2)
 (.*#) :: Scalar -> Matrix2 -> Matrix2

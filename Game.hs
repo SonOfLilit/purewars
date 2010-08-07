@@ -50,10 +50,10 @@ mapLines f = map f'
   where f' (v, u) = (f v, f u)
 
 logic :: LogicStep
-logic t state = mapGameStateM (tick t) state
+logic t = mapGameStateM (tick t)
 
 getLines :: GameState -> [Line]
-getLines = concat . map draw . objects
+getLines = concatMap draw . objects
 
 initialGameState :: GameState
 initialGameState = GameState {ship1 = Ship {position = (0, 0)}

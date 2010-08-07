@@ -45,7 +45,7 @@ frame lastFrameTime stateRef logicStep = do
   let timeDiff = now `diffUTCTime` lastFrameTime
   
   state <- readIORef stateRef
-  state' <- logicStep (timeDiff) state
+  state' <- logicStep timeDiff state
   writeIORef stateRef state'
   GLUT.postRedisplay Nothing
   

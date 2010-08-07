@@ -7,7 +7,7 @@ license:             BSD3
 license-file:        LICENSE
 author:              Aur Saraf
 maintainer:          sonoflilit@gmail.com
-build-depends:       base >= 4, time, monads-fd, OpenGL, GLUT >= 2
+build-depends:       base >= 4, containers, time, monads-fd, OpenGL, GLUT >= 2
 build-type:          Simple
 
 executable:          purewars

@@ -1,5 +1,4 @@
 {-# LANGUAGE NamedFieldPuns #-}
-
 module Game (Line
             ,getLines
             ,GameState
@@ -7,7 +6,9 @@ module Game (Line
             ,LogicStep
             ,logic) where
 import Data.Time.Clock
+import qualified Graphics.UI.GLUT as GLUT
 
+import Keyboard
 import Matrix
 
 
@@ -18,11 +19,8 @@ type Line = (Vector2, Vector2)
 
 data GameState = GameState {ship1 :: GameObject
                            ,sun :: GameObject}
-mapGameStateM :: Monad m => (GameObject -> m GameObject) -> GameState -> m GameState
-mapGameStateM f s@(GameState{ship1, sun}) = do
-  ship1' <- f ship1
-  sun' <- f sun
-  return s {ship1 = ship1', sun = sun'}
+mapGameState :: (GameObject -> GameObject) -> GameState -> GameState
+mapGameState f s@(GameState{ship1, sun}) = s {ship1 = f ship1, sun = f sun}
 
 objects :: GameState -> [GameObject]
 objects (GameState{ship1, sun}) = [ship1, sun]
@@ -30,16 +28,18 @@ objects (GameState{ship1, sun}) = [ship1, sun]
 data GameObject = Ship {position, velocity :: Vector2}
                 | Sun {position :: Vector2}
 
-type LogicStep = NominalDiffTime -> GameState -> IO GameState
+type LogicStep = NominalDiffTime -> Keyboard -> GameState -> GameState
 
-tick :: NominalDiffTime -> GameState -> GameObject -> IO GameObject
-tick t state ship@(Ship _ _) = do
+tick :: NominalDiffTime -> Keyboard -> GameState -> GameObject -> GameObject
+tick t keyboard state ship@(Ship _ _) =
   let t' = realToFrac t
-      sumForces = sunForce (position ship) (position $ sun state)
+      sumForces = thrust +: gravity
+      thrust = if pressed (GLUT.SpecialKey GLUT.KeyUp) keyboard then (5, 0) else zeroV
+      gravity = sunForce (position ship) (position $ sun state)
       velocity' = velocity ship +: (t' .*: sumForces)
       position' = position ship +: (t' .*: velocity')
-  return ship {position = position', velocity = velocity'}
-tick _ _ sun@(Sun _) = return sun
+  in ship {position = position', velocity = velocity'}
+tick _ _ _ sun@(Sun _) = sun
 
 shape :: GameObject -> [Line]
 shape (Ship _ _) = mapLines (scale 10 #:*:) [((-1, -1), (1, 0))
@@ -58,7 +58,7 @@ mapLines f = map f'
   where f' (v, u) = (f v, f u)
 
 logic :: LogicStep
-logic t state = mapGameStateM (tick t state) state
+logic t keyboard state = mapGameState (tick t keyboard state) state
 
 getLines :: GameState -> [Line]
 getLines = concatMap draw . objects

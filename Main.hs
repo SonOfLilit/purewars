@@ -8,6 +8,7 @@ import qualified Graphics.Rendering.OpenGL as GL
 import qualified Graphics.UI.GLUT as GLUT
 
 import Game
+import Keyboard
 import Matrix
 
 
@@ -39,23 +40,24 @@ reshape size@(GL.Size w h) = do
   GL.loadIdentity
   GL.ortho2D 0 (fromIntegral w) 0 (fromIntegral h)
 
-frame :: UTCTime -> IORef GameState -> LogicStep -> GLUT.TimerCallback
-frame lastFrameTime stateRef logicStep = do
+frame :: UTCTime -> IORef Keyboard -> IORef GameState -> LogicStep -> GLUT.TimerCallback
+frame lastFrameTime keyboardRef stateRef logicStep = do
   now <- getCurrentTime
   let timeDiff = now `diffUTCTime` lastFrameTime
   
   state <- readIORef stateRef
-  state' <- logicStep timeDiff state
+  keyboard <- readIORef keyboardRef
+  let state' = logicStep timeDiff keyboard state
   writeIORef stateRef state'
   GLUT.postRedisplay Nothing
   
   let nextFrameTime = fps `addUTCTime` lastFrameTime
       waitTime = nextFrameTime `diffUTCTime` now
       msWait = truncate (waitTime * 1000)
-  GLUT.addTimerCallback msWait (frame now stateRef logicStep)
+  GLUT.addTimerCallback msWait (frame now keyboardRef stateRef logicStep)
 
-display :: IORef GameState -> GLUT.DisplayCallback
-display stateRef = do
+displayCallback :: IORef GameState -> GLUT.DisplayCallback
+displayCallback stateRef = do
   state <- readIORef stateRef
   
   GL.clear [GL.ColorBuffer]
@@ -72,6 +74,8 @@ main = do
   GLUT.reshapeCallback $= Just reshape
   now <- getCurrentTime
   stateRef <- newIORef initialGameState
-  GLUT.displayCallback $= display stateRef
-  GLUT.addTimerCallback 1 (frame now stateRef logic)
+  keyboardRef <- newIORef initialKeyboardState
+  GLUT.keyboardMouseCallback $= Just (keyboardCallback keyboardRef)
+  GLUT.displayCallback $= displayCallback stateRef
+  GLUT.addTimerCallback 1 (frame now keyboardRef stateRef logic)
   GLUT.mainLoop

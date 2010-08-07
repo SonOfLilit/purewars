@@ -36,7 +36,8 @@ s .*# (u, v) = (s .*: u, s .*: v)
 m #*# (c, d) = (m #*: c, m #*: d)
 type Transformation = (Matrix2, Vector2)
 (#:*#:) :: Transformation -> Transformation -> Transformation
-(m, v) #:*#: (m', v') = (m #*# m', v +: v')
+(m@(m0, m1), v) #:*#: (m', v'@(x', y')) =
+  (m #*# m', v +: v' +: (x' .*: m0) +: (y' .*: m1))
 (#:*:) :: Transformation -> Vector2 -> Vector2
 (m, u) #:*: v = (m #*: v) +: u
 zeroV :: Vector2
@@ -48,3 +49,7 @@ scale :: Scalar -> Transformation
 scale k = (k .*# idM, zeroV)
 translate :: Vector2 -> Transformation
 translate v = (idM, v)
+rotate :: Scalar -> Transformation
+rotate a = (((c, -s), (s, c)), zeroV)
+  where s = sin a
+        c = cos a

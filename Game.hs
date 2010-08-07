@@ -30,9 +30,9 @@ cannonLoadingTime = 0.5
 shotLifetime :: NominalDiffTime
 shotLifetime = 5
 shotDistance :: Scalar
-shotDistance = 6
+shotDistance = 11
 shotVelocity :: Scalar
-shotVelocity = 5
+shotVelocity = 25
 
 sunMass :: Scalar
 sunMass = 2000000
@@ -57,10 +57,10 @@ objects (GameState{ship1, shots, sun}) = [ship1, sun] ++ shots
 
 data GameObject = Ship {position, velocity :: Vector2
                        ,angle, angleVelocity :: Scalar
-                       ,timeToNextShot :: NominalDiffTime}
+                       ,shotTimer :: NominalDiffTime}
                 | Shot {position, velocity :: Vector2
                        ,angle :: Scalar
-                       ,lifetime :: NominalDiffTime}
+                       ,shotTimer :: NominalDiffTime}
                 | Sun {position :: Vector2, angle :: Scalar}
 
 type LogicStep = NominalDiffTime -> Keyboard -> GameState -> GameState
@@ -75,15 +75,19 @@ tick t keyboard state ship@(Ship _ _ _ _ _) =
         (True, False) -> engineTorque
         (False, True) -> -engineTorque
         _ -> -engineTorqueDampening * angleVelocity ship
-  in applyPhysics thrust torque t state ship
-tick t _ state shot@(Shot _ _ _ _) = applyPhysics zeroV 0 t state shot'
-  where t' = realToFrac t
-        shot' = shot {lifetime = lifetime shot - t'}
+  in applyPhysics thrust torque t state . updateShotTimer t $ ship
+tick t _ state shot@(Shot _ _ _ _) = 
+  applyPhysics zeroV 0 t state . updateShotTimer t $ shot
 tick _ _ _ o = o
+
+updateShotTimer :: NominalDiffTime -> GameObject -> GameObject
+updateShotTimer t o = o {shotTimer = max 0 $ shotTimer o - realToFrac t}
 
 -- notice how angles are not calculated when not a ship. Lazy
 -- evaluation is pretty
-applyPhysics :: Vector2 -> Scalar -> NominalDiffTime -> GameState -> GameObject -> GameObject
+applyPhysics :: Vector2 -> Scalar -> 
+                NominalDiffTime -> GameState -> 
+                GameObject -> GameObject
 applyPhysics force torque t state o =
   let t' = realToFrac t
       sumForces = force +: gravity
@@ -125,22 +129,27 @@ mapLines f = map f'
 logic :: LogicStep
 logic t keyboard state = 
   let state' = mapGameState (tick t keyboard state) state
-  in let shoot = pressed ship1ShootKey keyboard
-         state'' = if shoot 
-                 then state' {ship1 = (ship1 state') {timeToNextShot = cannonLoadingTime}
-                             ,shots = ((newShot $ ship1 state') : shots state')}
-                 else state'
-     in state''
+      ship1' = ship1 state'
+      shoot = pressed ship1ShootKey keyboard && shotTimer ship1' == 0
+      ship1'' = if shoot 
+               then ship1' {shotTimer = cannonLoadingTime}
+               else ship1'
+      shots' = filter ((>0) . shotTimer) (shots state')
+      shots'' = if shoot
+              then newShot $ ship1 state' : shots'
+              else shots'
+  in state' {ship1 = ship1'', shots = shots''}
 
+-- TODO: Better handling of shooting backwards of ship velocity
 newShot :: GameObject -> GameObject
 newShot ship = Shot {position = position ship +: (shotDistance .*: direction)
                     ,velocity = velocity ship +: (shotVelocity .*: direction)
                     ,angle = 0
-                    ,lifetime = shotLifetime}
+                    ,shotTimer = shotLifetime}
   where direction = rotate (angle ship) #:*: (1, 0)
 
 getLines :: GameState -> [Line]
-getLines = concat . (++limitRect). (map draw . objects)
+getLines = concat . (++limitRect) . map draw . objects
   where limitRect = [[((1, 1), (1, h)), ((1, h), (w, h)),
                       ((w, h), (w, 1)), ((w, 1), (1, 1))]]
         w = screenWidth
@@ -151,7 +160,8 @@ initialGameState = GameState {ship1 = Ship {position = zeroV
                                            ,velocity = zeroV
                                            ,angle = 0
                                            ,angleVelocity = 0
-                                           ,timeToNextShot = 0}
+                                           ,shotTimer = 0}
                              ,shots = []
-                             ,sun = Sun {position = (screenWidth/2, screenHeight/2)
+                             ,sun = Sun {position = (screenWidth/2
+                                                    ,screenHeight/2)
                                         ,angle = 0}}

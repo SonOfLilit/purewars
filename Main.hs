@@ -40,7 +40,10 @@ reshape size@(GL.Size w h) = do
   GL.loadIdentity
   GL.ortho2D 0 (fromIntegral w) 0 (fromIntegral h)
 
-frame :: UTCTime -> IORef Keyboard -> IORef GameState -> LogicStep -> GLUT.TimerCallback
+frame :: UTCTime -> 
+         IORef Keyboard -> IORef GameState -> 
+         LogicStep -> 
+         GLUT.TimerCallback
 frame lastFrameTime keyboardRef stateRef logicStep = do
   now <- getCurrentTime
   let timeDiff = now `diffUTCTime` lastFrameTime

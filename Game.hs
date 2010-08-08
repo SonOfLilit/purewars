@@ -27,6 +27,8 @@ engineTorqueDampening :: Scalar
 engineTorqueDampening = 2
 cannonLoadingTime :: NominalDiffTime
 cannonLoadingTime = 0.5
+shotLimit :: Int
+shotLimit = 5
 shotLifetime :: NominalDiffTime
 shotLifetime = 5
 shotDistance :: Scalar
@@ -130,13 +132,15 @@ logic :: LogicStep
 logic t keyboard state = 
   let state' = mapGameState (tick t keyboard state) state
       ship1' = ship1 state'
-      shoot = pressed ship1ShootKey keyboard && shotTimer ship1' == 0
+      shoot = pressed ship1ShootKey keyboard 
+           && shotTimer ship1' == 0 
+           && length (shots state') < shotLimit
       ship1'' = if shoot 
                then ship1' {shotTimer = cannonLoadingTime}
                else ship1'
       shots' = filter ((>0) . shotTimer) (shots state')
       shots'' = if shoot
-              then newShot $ ship1 state' : shots'
+              then (newShot $ ship1 state') : shots'
               else shots'
   in state' {ship1 = ship1'', shots = shots''}
 

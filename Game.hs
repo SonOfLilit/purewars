@@ -47,15 +47,15 @@ screenHeight = 480
 type Line = (Vector2, Vector2)
 
 data GameState = GameState {ship1 :: GameObject
-                           ,shots :: [GameObject]
+                           ,shots1 :: [GameObject]
                            ,sun :: GameObject}
 mapGameState :: (GameObject -> GameObject) -> GameState -> GameState
-mapGameState f s@(GameState{ship1, shots, sun}) = s {ship1 = f ship1
-                                                    ,shots = map f shots
+mapGameState f s@(GameState{ship1, shots1, sun}) = s {ship1 = f ship1
+                                                    ,shots1 = map f shots1
                                                     ,sun = f sun}
 
 objects :: GameState -> [GameObject]
-objects (GameState{ship1, shots, sun}) = [ship1, sun] ++ shots
+objects (GameState{ship1, shots1, sun}) = [ship1, sun] ++ shots1
 
 data GameObject = Ship {position, velocity :: Vector2
                        ,angle, angleVelocity :: Scalar
@@ -134,15 +134,15 @@ logic t keyboard state =
       ship1' = ship1 state'
       shoot = pressed ship1ShootKey keyboard 
            && shotTimer ship1' == 0 
-           && length (shots state') < shotLimit
+           && length (shots1 state') < shotLimit
       ship1'' = if shoot 
                then ship1' {shotTimer = cannonLoadingTime}
                else ship1'
-      shots' = filter ((>0) . shotTimer) (shots state')
-      shots'' = if shoot
-              then (newShot $ ship1 state') : shots'
-              else shots'
-  in state' {ship1 = ship1'', shots = shots''}
+      shots1' = filter ((>0) . shotTimer) (shots1 state')
+      shots1'' = if shoot
+              then (newShot $ ship1 state') : shots1'
+              else shots1'
+  in state' {ship1 = ship1'', shots1 = shots1''}
 
 -- TODO: Better handling of shooting backwards of ship velocity
 newShot :: GameObject -> GameObject
@@ -165,7 +165,7 @@ initialGameState = GameState {ship1 = Ship {position = zeroV
                                            ,angle = 0
                                            ,angleVelocity = 0
                                            ,shotTimer = 0}
-                             ,shots = []
+                             ,shots1 = []
                              ,sun = Sun {position = (screenWidth/2
                                                     ,screenHeight/2)
                                         ,angle = 0}}

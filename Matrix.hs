@@ -26,6 +26,8 @@ toNormal :: Vector2 -> (Vector2, Scalar)
 toNormal v@(x, y) = (a, r)
   where r = sqrt(x*x + y*y)
         a = (1/r) .*: v
+absV :: Vector2 -> Scalar
+absV v = r where (_a, r) = toNormal v
 
 type Matrix2 = (Vector2, Vector2)
 (.*#) :: Scalar -> Matrix2 -> Matrix2

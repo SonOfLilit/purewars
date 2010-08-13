@@ -5,6 +5,7 @@ module Game (Line
             ,initialGameState
             ,LogicStep
             ,logic) where
+import Control.Monad.State
 import Data.Fixed(mod')
 import Data.Time.Clock
 import qualified Graphics.UI.GLUT as GLUT
@@ -12,12 +13,16 @@ import qualified Graphics.UI.GLUT as GLUT
 import Keyboard
 import Matrix
 
-
-ship1ThrustKey, ship1CCWKey, ship1CWKey, ship1ShootKey :: GLUT.Key
-ship1ThrustKey = GLUT.SpecialKey GLUT.KeyUp
-ship1CCWKey = GLUT.SpecialKey GLUT.KeyRight
-ship1CWKey = GLUT.SpecialKey GLUT.KeyLeft
-ship1ShootKey = GLUT.Char '/'
+data ShipControls = Controls{thrustKey, ccwKey, cwKey, shootKey :: GLUT.Key}
+controls1, controls2 :: ShipControls
+controls1 = Controls{thrustKey = GLUT.SpecialKey GLUT.KeyUp
+                    ,ccwKey = GLUT.SpecialKey GLUT.KeyRight
+                    ,cwKey = GLUT.SpecialKey GLUT.KeyLeft
+                    ,shootKey = GLUT.Char '/'}
+controls2 = Controls{thrustKey = GLUT.Char 'w'
+                    ,ccwKey = GLUT.Char 'd'
+                    ,cwKey = GLUT.Char 'a'
+                    ,shootKey = GLUT.Char 'f'}
 
 thrustForce :: Scalar
 thrustForce = 60
@@ -32,7 +37,7 @@ shotLimit = 5
 shotLifetime :: NominalDiffTime
 shotLifetime = 5
 shotDistance :: Scalar
-shotDistance = 11
+shotDistance = 17
 shotVelocity :: Scalar
 shotVelocity = 25
 
@@ -44,36 +49,56 @@ screenWidth, screenHeight :: Scalar
 screenWidth = 640
 screenHeight = 480
 
+type Transform a = a -> a
+
 type Line = (Vector2, Vector2)
 
-data GameState = GameState {ship1 :: GameObject
-                           ,shots1 :: [GameObject]
-                           ,sun :: GameObject}
-mapGameState :: (GameObject -> GameObject) -> GameState -> GameState
-mapGameState f s@(GameState{ship1, shots1, sun}) = s {ship1 = f ship1
-                                                    ,shots1 = map f shots1
-                                                    ,sun = f sun}
+data GameStatus = Menu | Playing | Win
+
+data GameState = GameState{status :: GameStatus
+                          ,ship1, ship2 :: GameObject
+                          ,shots1, shots2 :: [GameObject]
+                          ,sun :: GameObject}
+mapGameState :: Transform GameObject -> Transform GameState
+mapGameState f s@(GameState{ship1, ship2, shots1, shots2, sun}) = 
+  s{ship1 = f ship1
+   ,ship2 = f ship2
+   ,shots1 = map f shots1
+   ,shots2 = map f shots2
+   ,sun = f sun}
 
 objects :: GameState -> [GameObject]
-objects (GameState{ship1, shots1, sun}) = [ship1, sun] ++ shots1
+objects (GameState{ship1, ship2, shots1, shots2, sun}) = [ship1, ship2, sun] ++ shots1 ++ shots2
 
-data GameObject = Ship {position, velocity :: Vector2
-                       ,angle, angleVelocity :: Scalar
-                       ,shotTimer :: NominalDiffTime}
-                | Shot {position, velocity :: Vector2
-                       ,angle :: Scalar
-                       ,shotTimer :: NominalDiffTime}
-                | Sun {position :: Vector2, angle :: Scalar}
+allShots :: GameState -> [GameObject]
+allShots state = shots1 state ++ shots2 state
 
-type LogicStep = NominalDiffTime -> Keyboard -> GameState -> GameState
+data GameObject = Ship{position, velocity :: Vector2
+                      ,angle, angleVelocity :: Scalar
+                      ,shotTimer :: NominalDiffTime
+                      ,controls :: ShipControls
+                      ,setShip :: GameObject -> Transform GameState
+                      ,getShipShots :: GameState -> [GameObject]
+                      ,setShipShots :: [GameObject] -> Transform GameState}
+                | Shot{position, velocity :: Vector2
+                      ,angle :: Scalar
+                      ,shotTimer :: NominalDiffTime}
+                | Sun{position :: Vector2, angle :: Scalar}
+halfHeight, radius :: GameObject -> Scalar
+halfHeight (Ship _ _ _ _ _ _ _ _ _) = 10
+halfHeight (Shot _ _ _ _) = 0.5
+halfHeight (Sun _ _) = 1
+radius o = sqrt 2 * halfHeight o
 
-tick :: NominalDiffTime -> Keyboard -> GameState -> GameObject -> GameObject
-tick t keyboard state ship@(Ship _ _ _ _ _) =
-  let thrust = if pressed ship1ThrustKey keyboard 
+type LogicStep = NominalDiffTime -> Keyboard -> Transform GameState
+
+tick :: NominalDiffTime -> Keyboard -> GameState -> Transform GameObject
+tick t keyboard state ship@(Ship _ _ _ _ _ _ _ _ _) =
+  let p f = pressed (f (controls ship)) keyboard
+      thrust = if p thrustKey
                then rotate (angle ship) #:*: (thrustForce, 0)
                else zeroV
-      p key = pressed key keyboard
-      torque = case (p ship1CCWKey, p ship1CWKey) of
+      torque = case (p ccwKey, p cwKey) of
         (True, False) -> engineTorque
         (False, True) -> -engineTorque
         _ -> -engineTorqueDampening * angleVelocity ship
@@ -82,90 +107,161 @@ tick t _ state shot@(Shot _ _ _ _) =
   applyPhysics zeroV 0 t state . updateShotTimer t $ shot
 tick _ _ _ o = o
 
-updateShotTimer :: NominalDiffTime -> GameObject -> GameObject
-updateShotTimer t o = o {shotTimer = max 0 $ shotTimer o - realToFrac t}
+updateShotTimer :: NominalDiffTime -> Transform GameObject
+updateShotTimer t o = o{shotTimer = max 0 (shotTimer o - realToFrac t)}
 
 -- notice how angles are not calculated when not a ship. Lazy
 -- evaluation is pretty
 applyPhysics :: Vector2 -> Scalar -> 
                 NominalDiffTime -> GameState -> 
-                GameObject -> GameObject
+                Transform GameObject
 applyPhysics force torque t state o =
   let t' = realToFrac t
       sumForces = force +: gravity
-      gravity = sunForce (position o) (position $ sun state)
+      gravity = sunForce (position o) (position (sun state))
       velocity' = velocity o +: (t' .*: sumForces)
       position' = let (x, y) = position o +: (t' .*: velocity')
                   in (x `mod'` screenWidth, y `mod'` screenHeight)
       angleVelocity' = angleVelocity o + t' * torque
       angle' = angle o + t' * angleVelocity'
   in case o of
-    (Ship _ _ _ _ _) ->
-      o {position = position'
-        ,velocity = velocity'
-        ,angle = angle'
-        ,angleVelocity = angleVelocity'}
+    (Ship _ _ _ _ _ _ _ _ _) ->
+      o{position = position'
+       ,velocity = velocity'
+       ,angle = angle'
+       ,angleVelocity = angleVelocity'}
     _ ->
-      o {position = position'
-        ,velocity = velocity'}
+      o{position = position'
+       ,velocity = velocity'}
 
 sunForce :: Vector2 -> Vector2 -> Vector2
 sunForce shipPos sunPos = (sunMass/(r*r)) .*: a
   where (a, r) = toNormal (sunPos -: shipPos)
 
 shape :: GameObject -> [Line]
-shape (Ship _ _ _ _ _) = mapLines (scale 10 #:*:) [((-1, -1), (1, 0))
-                                                  ,((1, 0), (-1, 1))
-                                                  ,((-1, 1), (-1, -1))]
+shape (Ship _ _ _ _ _ _ _ _ _) = [((-1, -1), (1, 0))
+                         ,((1, 0), (-1, 1))
+                         ,((-1, 1), (-1, -1))]
 shape _ = [((-1, -1), (1, 0))
-                ,((1, 0), (-1, 1))
-                ,((-1, 1), (-1, -1))]
+          ,((1, 0), (-1, 1))
+          ,((-1, 1), (-1, -1))]
 
 draw :: GameObject -> [Line]
-draw o = mapLines (translate (position o) #:*#: rotate (angle o) #:*:) $ shape o
+draw o = mapLines (transform  #:*:) (shape o)
+  where transform = translate (position o) #:*#: 
+                    rotate (angle o) #:*#: 
+                    scale (halfHeight o)
 
 mapLines :: (Vector2 -> Vector2) -> [Line] -> [Line]
 mapLines f = map f' 
   where f' (v, u) = (f v, f u)
 
 logic :: LogicStep
-logic t keyboard state = 
-  let state' = mapGameState (tick t keyboard state) state
-      ship1' = ship1 state'
-      shoot = pressed ship1ShootKey keyboard 
-           && shotTimer ship1' == 0 
-           && length (shots1 state') < shotLimit
-      ship1'' = if shoot 
-               then ship1' {shotTimer = cannonLoadingTime}
-               else ship1'
-      shots1' = filter ((>0) . shotTimer) (shots1 state')
-      shots1'' = if shoot
-              then (newShot $ ship1 state') : shots1'
-              else shots1'
-  in state' {ship1 = ship1'', shots1 = shots1''}
+logic t keyboard state@(GameState{status=Playing}) = execState logic' state
+  where
+    logic' = do
+      let theSun = sun state
+          shotFilter shot = shotTimer shot > 0 && not (collision theSun shot)
+      modify (\s-> mapGameState (tick t keyboard s) s)
+      modify . modifyShots $ filter shotFilter
+      modify . modifyShips $ handleShooting keyboard
+      modify . modifyShips $ shipCollisions
+logic t keyboard s@(GameState{status=Win}) = execState logic' s
+  where updateShipShotTimer :: GameObject -> Transform GameState
+        updateShipShotTimer ship = setShip ship (updateShotTimer t ship)
+        logic' :: State GameState ()
+        logic' = do
+          modify . modifyShips $ updateShipShotTimer
+          modify . modifyShips $ handleOkPress
+        handleOkPress ship state =
+          let okPressed = pressed (shootKey $ controls ship) keyboard 
+                          && shotTimer ship == 0 
+          in if okPressed
+             then initialGameState
+             else state
+
+modifyShots :: Transform [GameObject] -> Transform GameState
+modifyShots f s = s{shots1=f (shots1 s), shots2=f (shots2 s)}
+modifyShips :: (GameObject -> Transform GameState) -> Transform GameState
+modifyShips f s = f (ship1 s) . f (ship2 s) $ s    
+
+shipCollisions :: GameObject -> Transform GameState
+shipCollisions ship state =
+  let shots = allShots state
+      theSun = sun state
+      isHit = any (collision ship) shots || collision ship theSun
+  in if isHit
+     then state{status=Win}
+     else state
+
+collision :: GameObject -> GameObject -> Bool
+collision o1 o2 = absV centersV <= radiusSum
+  where centersV = position o2 -: position o1
+        radiusSum = radius o1 + radius o2
+
+handleShooting :: Keyboard -> GameObject -> Transform GameState
+handleShooting keyboard ship state =
+  let shots = getShipShots ship $ state
+      shoot = pressed (shootKey $ controls ship) keyboard 
+              && shotTimer ship == 0 
+              && length shots < shotLimit
+  in if shoot
+    then setShipShots ship (newShot ship : shots) . 
+         setShip ship ship{shotTimer = cannonLoadingTime} $
+         state
+    else state
 
 -- TODO: Better handling of shooting backwards of ship velocity
 newShot :: GameObject -> GameObject
-newShot ship = Shot {position = position ship +: (shotDistance .*: direction)
-                    ,velocity = velocity ship +: (shotVelocity .*: direction)
-                    ,angle = 0
-                    ,shotTimer = shotLifetime}
+newShot ship = Shot{position = position ship +: (shotDistance .*: direction)
+                   ,velocity = velocity ship +: (shotVelocity .*: direction)
+                   ,angle = 0
+                   ,shotTimer = shotLifetime}
   where direction = rotate (angle ship) #:*: (1, 0)
 
 getLines :: GameState -> [Line]
-getLines = concat . (++limitRect) . map draw . objects
-  where limitRect = [[((1, 1), (1, h)), ((1, h), (w, h)),
-                      ((w, h), (w, 1)), ((w, 1), (1, 1))]]
-        w = screenWidth
+getLines state@(GameState{status=Playing}) =
+  concat . (++[limitRect]) . map draw . objects $ state
+getLines GameState{status=Win} = limitRect
+
+limitRect :: [Line]
+limitRect = [((1, 1), (1, h)), ((1, h), (w, h)),
+             ((w, h), (w, 1)), ((w, 1), (1, 1))]
+  where w = screenWidth
         h = screenHeight
 
+
+data Player = Player1 | Player2
+
 initialGameState :: GameState
-initialGameState = GameState {ship1 = Ship {position = zeroV
-                                           ,velocity = zeroV
-                                           ,angle = 0
-                                           ,angleVelocity = 0
-                                           ,shotTimer = 0}
-                             ,shots1 = []
-                             ,sun = Sun {position = (screenWidth/2
-                                                    ,screenHeight/2)
-                                        ,angle = 0}}
+initialGameState = GameState{status = Playing
+                            ,ship1 = initialShipState Player1
+                            ,ship2 = initialShipState Player2
+                            ,shots1 = []
+                            ,shots2 = []
+                            ,sun = Sun{position = (screenWidth/2
+                                                  ,screenHeight/2)
+                                      ,angle = 0}}
+
+initialShipState :: Player -> GameObject
+initialShipState player = Ship{position = case player of
+                                  Player1 -> (20, 20)
+                                  Player2 -> (640, 480) -: (20, 20)
+                              ,velocity = zeroV
+                              ,angle = case player of
+                                Player1 -> 0
+                                Player2 -> pi
+                              ,angleVelocity = 0
+                              ,shotTimer = cannonLoadingTime
+                              ,controls = case player of
+                                Player1 -> controls1
+                                Player2 -> controls2
+                              ,setShip = case player of
+                                Player1 -> \ship s-> s{ship1 = ship}
+                                Player2 -> \ship s-> s{ship2 = ship}
+                              ,getShipShots = case player of
+                                Player1 -> shots1
+                                Player2 -> shots2
+                              ,setShipShots = case player of
+                                Player1 -> \shots s-> s{shots1 = shots}
+                                Player2 -> \shots s-> s{shots2 = shots}}

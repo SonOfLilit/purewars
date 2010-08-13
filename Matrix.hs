@@ -1,5 +1,5 @@
 module Matrix where
-
+import qualified Graphics.Rendering.OpenGL as GL
 
 -- Key for operator names:
 -- 
@@ -14,7 +14,7 @@ module Matrix where
 -- so, e.g., #:*: is application of a transformation to a vector.
 --
 -- :+: was renamed +: because only data constructors can be called /:.*/
-type Scalar = Double
+type Scalar = GL.GLdouble
 type Vector2 = (Scalar, Scalar)
 (.*:) :: Scalar -> Vector2 -> Vector2
 s .*: (x, y) = (s*x, s*y)
